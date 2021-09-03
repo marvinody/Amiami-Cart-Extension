@@ -1,11 +1,11 @@
 {
-  "name": "__MSG_appName__",
-  "description": "__MSG_appDescription__",
+  "name": "Amiami Cart Adder",
+  "description": "A small extension to add things to your cart in an instant. Useful for short pre-order windows if you want to order stuff quickly. DOES NOT PLACE THE ORDER FOR YOU, it simply adds it to your cart so you don't have to visit different pages.",
   "version": "0.0.0",
   "permissions": [
     "storage",
-    "activeTab",
-    "<all_urls>"
+    "cookies",
+    "*://*.amiami.com/*"
   ],
   "background": {
     "scripts": ["background.bundle.js"]
@@ -24,9 +24,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "match_about_blank": true,
-      "all_frames": true,
+      "matches": ["*://*.amiami.com/*"],
       "js": ["content_script.bundle.js"],
       "run_at": "document_end"
     }

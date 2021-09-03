@@ -1,7 +1,7 @@
 const { generateGuid } = require("./src/services/guid");
 const constants = {
   appConfig: {
-    appName: "EXTENSION_NAME",
+    appName: "Amiami Cart Adder",
     urls: {
       chrome:
         "CHROME_STORE_URL",

@@ -8,8 +8,9 @@ module.exports = {
   },
   variants: {},
   plugins: [
-    require("@tailwindcss/ui")({
-      layout: "sidebar"
-    })
+    // require("@tailwindcss/ui")({
+    //   layout: "sidebar"
+    // })
+    require("@tailwindcss/forms")
   ]
 };
