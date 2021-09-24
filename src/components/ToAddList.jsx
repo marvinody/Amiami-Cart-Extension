@@ -1,9 +1,19 @@
-/* eslint-disable react/prop-types */
-import { useState } from 'react';
+import PropTypes from 'prop-types';
 import { XCircleIcon } from '@heroicons/react/outline';
 
+const getDisplayName = ({ name, scode }) => {
+  if (!name) {
+    return `Loading - ${scode}`;
+  }
 
-const ToAddItem = ({ url, thumb, name, amt }) => {
+  if (name.length > 32) {
+    return `${name.slice(0, 32)}...`;
+  }
+
+  return name;
+};
+
+const ToAddItem = ({ scode, url, thumb, name, amt }) => {
   return <li>
     <div className="relative pb-8">
       <div className="relative flex space-x-3">
@@ -14,7 +24,9 @@ const ToAddItem = ({ url, thumb, name, amt }) => {
         <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
           <div>
             <span className='mr-2'>({amt})</span>
-            <a href={url} className="text-sm font-medium underline">{name}</a>
+            <a href={url} title={name} className="text-sm font-medium underline">
+              {getDisplayName({ name, scode })}
+            </a>
           </div>
         </div>
         <div className='inline-flex items-center p-2'>
@@ -32,33 +44,24 @@ const ToAddItem = ({ url, thumb, name, amt }) => {
   </li>;
 };
 
-export default function ToAddList() {
-
-  const [items] = useState([
-    {
-      url: "https://www.amiami.com/eng/detail/?gcode=GOODS-04152310",
-      amt: 1,
-      thumb: "https://img.amiami.com/images/product/main/213/GOODS-04152310.jpg",
-      name: "[Bonus] Touhou Plush Series 17 Kaguya Houraisan Fumofumo Kaguya.(Pre-order)",
-    },
-    {
-      url: "https://www.amiami.com/eng/detail/?gcode=GOODS-04152311",
-      amt: 2,
-      thumb: "https://img.amiami.com/images/product/main/213/GOODS-04152311.jpg",
-      name: "[Bonus] Touhou Plush Series 18 Fujiwara no Mokou Fumofumo Moko.(Pre-order)",
-    },
-    {
-      url: "https://www.amiami.com/eng/detail/?gcode=CGD-9540",
-      amt: 3,
-      thumb: "https://img.amiami.com/images/product/review/102/CGD-9540_01.jpg",
-      name: "Touhou Plushie Series EX3 Cirno Deka Fumo Cirno (Single Shipment)",
-    },
-  ]);
+export default function ToAddList(props) {
 
   return <div className="flow-root mt-8">
     <ul role="list" >
-      {items.map(item => <ToAddItem key={item.url} {...item}></ToAddItem>)}
+      {props.items.map(item => <ToAddItem key={item.scode} {...item}></ToAddItem>)}
     </ul>
   </div>;
 
 }
+
+ToAddList.propTypes = {
+  items: PropTypes.array,
+};
+
+ToAddItem.propTypes = {
+  scode: PropTypes.string,
+  url: PropTypes.string,
+  thumb: PropTypes.string,
+  name: PropTypes.string,
+  amt: PropTypes.number,
+};

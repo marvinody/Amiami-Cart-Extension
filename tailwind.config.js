@@ -6,7 +6,9 @@ module.exports = {
   theme: {
     extend: {}
   },
-  variants: {},
+  variants: {
+    opacity: ({ after }) => after(['disabled']),
+  },
   plugins: [
     // require("@tailwindcss/ui")({
     //   layout: "sidebar"

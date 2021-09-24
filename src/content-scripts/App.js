@@ -15,6 +15,7 @@
 //   console.log({ cookie });
 // })
 
+import { ITEM_LOOKUP, ITEM_LOOKUP_RESP } from '../MessageTypes'
 
 
 const addToCart = ({ ransu, scode }) => {
@@ -39,12 +40,44 @@ const addToCart = ({ ransu, scode }) => {
     .then(response => response.json())
     .then(data => console.log(data))
     .catch(err => console.error(err));
+};
 
+const lookupItem = ({ scode }) => {
+  console.log(`Looking up "${scode}"`);
+  content.fetch(`https://api.amiami.com/api/v1.0/item?scode=${encodeURIComponent(scode)}`, {
+
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      "X-User-Key": "amiami_dev",
+      "Origin": "https://www.amiami.com",
+    },
+  })
+    .then(response => response.json())
+    .then(data => {
+      return {
+        scode,
+        data,
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      return {
+        scode,
+        err: err.message,
+      }
+    })
+    .then(resp => {
+      console.log("SENDING " + ITEM_LOOKUP_RESP + JSON.stringify(resp, null, 2));
+      browser.runtime.sendMessage({
+        [ITEM_LOOKUP_RESP]: resp
+      });
+    })
 }
 
 // eslint-disable-next-line no-undef
 browser.runtime.onMessage.addListener(message => {
-  console.log(message, Boolean(message.ADD_TO_CART));
+  console.log(message, Boolean(message.ADD_TO_CART), Boolean(message[ITEM_LOOKUP]),);
 
 
   if (message.ADD_TO_CART) {
@@ -53,6 +86,9 @@ browser.runtime.onMessage.addListener(message => {
     browser.runtime.sendMessage({
       cookieUpdate: "NEW COOKIE VALUE"
     });
+  } else if (message[ITEM_LOOKUP]) {
+    console.log(`LOOKING UP ITEM: ${message[ITEM_LOOKUP]}`)
+    lookupItem({ scode: message[ITEM_LOOKUP] })
   }
 })
 

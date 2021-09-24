@@ -5,7 +5,6 @@
 // import schema from "./services/schema";
 // import Routes from "./routes";
 
-const { ErrorOutlineTwoTone } = require("@material-ui/icons");
 
 // let AppInitState = 0; // it means app is off on startup
 
