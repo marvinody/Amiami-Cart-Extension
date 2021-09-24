@@ -53,8 +53,8 @@ const getCookie = async (setCookie, setTab) => {
       //   }
       // };
 
+      // this is required to make sure we can use GET requests on this endpoint and stuff
       if (!tabs[0].active) {
-        console.log("NOT ACTIVE TAB")
         return;
       }
       setTab(tabs[0]);
@@ -102,15 +102,7 @@ const savedItems = {
 export default function App() {
   console.count("APP RENDER");
 
-  const [items, setItems] = useState([
-    // {
-    //   url: "https://www.amiami.com/eng/detail/?gcode=GOODS-04152310",
-    //   amt: 1,
-    //   thumb: "https://img.amiami.com/images/product/main/213/GOODS-04152310.jpg",
-    //   name: "[Bonus] Touhou Plush Series 17 Kaguya Houraisan Fumofumo Kaguya.(Pre-order)",
-    //   loaded: true,
-    // }
-  ]);
+  const [items, setItems] = useState([]);
   console.log({
     items,
   })
@@ -153,28 +145,33 @@ export default function App() {
     );
   };
   const isFirstRun = useRef(true);
+  const hasLoadedItems = useRef(false);
   useEffect(() => {
+
+    // I'm not super happy about this but we need a way to not trigger
+    // a save to memory unless after the first render and we've loaded once
+    // this works for now
     if (isFirstRun.current) {
       isFirstRun.current = false;
       return;
     }
 
-    console.log("ITEMS CHANGED IN SAVE HOOK");
+    if(hasLoadedItems.current) {
+      hasLoadedItems.current = false;
+      return;
+    }
+
     (async () => {
       if (items.every(item => item.loaded)) {
-        console.log("Saving Items " + items.length);
-
-        // savedItems.set(items).then(() => console.log("SAVED"))
+        await savedItems.set(items);
       }
     })();
   }, [items, isFirstRun]);
 
   useEffect(() => {
     (async () => {
-      console.log("LOADING ITEMS")
       const loadedItems = await savedItems.get();
-
-      console.log({ loadedItems });
+      hasLoadedItems.current = true;
 
       if (!loadedItems) {
         await savedItems.set([]);
@@ -189,7 +186,7 @@ export default function App() {
     const unsub = messageList.sub({
       key: ITEM_LOOKUP_RESP,
       hook: resp => updatePendingToLoadedItem(resp)
-    })
+    });
 
     return unsub;
   }, [setItems]);

@@ -7,7 +7,6 @@ module.exports = (env, options) => {
   return {
     entry: {
       content_script: "./src/content-scripts/index.js",
-      background: "./src/background.js",
       popup: "./src/popup-page/index.js",
       option: "./src/option-page/index.js"
     },
