@@ -97,7 +97,7 @@ const savedItems = {
   set: (items) => {
     return browser.storage.local.set({ items, });
   }
-}
+};
 
 export default function App() {
   console.count("APP RENDER");
@@ -105,7 +105,7 @@ export default function App() {
   const [items, setItems] = useState([]);
   console.log({
     items,
-  })
+  });
   const [cookie, setCookie] = useState('Loading');
   const [tab, setTab] = useState(null);
 
@@ -176,7 +176,7 @@ export default function App() {
       if (!loadedItems) {
         await savedItems.set([]);
       } else {
-        setItems(loadedItems)
+        setItems(loadedItems);
       }
 
     })();

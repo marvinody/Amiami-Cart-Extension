@@ -15,7 +15,7 @@
 //   console.log({ cookie });
 // })
 
-import { ITEM_LOOKUP, ITEM_LOOKUP_RESP } from '../MessageTypes'
+import { ITEM_LOOKUP, ITEM_LOOKUP_RESP } from '../MessageTypes';
 
 
 const addToCart = ({ ransu, scode }) => {
@@ -58,22 +58,22 @@ const lookupItem = ({ scode }) => {
       return {
         scode,
         data,
-      }
+      };
     })
     .catch(err => {
       console.error(err);
       return {
         scode,
         err: err.message,
-      }
+      };
     })
     .then(resp => {
       console.log("SENDING " + ITEM_LOOKUP_RESP + JSON.stringify(resp, null, 2));
       browser.runtime.sendMessage({
         [ITEM_LOOKUP_RESP]: resp
       });
-    })
-}
+    });
+};
 
 // eslint-disable-next-line no-undef
 browser.runtime.onMessage.addListener(message => {
@@ -87,10 +87,10 @@ browser.runtime.onMessage.addListener(message => {
       cookieUpdate: "NEW COOKIE VALUE"
     });
   } else if (message[ITEM_LOOKUP]) {
-    console.log(`LOOKING UP ITEM: ${message[ITEM_LOOKUP]}`)
-    lookupItem({ scode: message[ITEM_LOOKUP] })
+    console.log(`LOOKING UP ITEM: ${message[ITEM_LOOKUP]}`);
+    lookupItem({ scode: message[ITEM_LOOKUP] });
   }
-})
+});
 
 function App() {
   // return <Demo/>;

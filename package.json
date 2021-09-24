@@ -19,7 +19,9 @@
     "zip": "zip -r dist.zip dist/*",
     "test": "yarn build:chromium && yarn build:firefox",
     "generate:locale": "node scripts/generate-locale",
-    "delete:locale": "node scripts/delete-locale"
+    "delete:locale": "node scripts/delete-locale",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "husky": {
     "hooks": {
