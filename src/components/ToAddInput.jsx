@@ -31,21 +31,24 @@ export default function ToAddInput(props) {
     setAmt(evt.target.value);
   };
 
-  const onSubmit = (evt) => {
+  const onSubmit = async (evt) => {
     console.log("SUBMISSION");
     evt.preventDefault();
     console.log({
       code, amt
     });
 
-    props.addPendingItem({
+    const isNewItem = await props.addPendingItem({
       scode: code,
       amt,
     });
 
-    props.sendMessage({
-      [ITEM_LOOKUP]: code,
-    });
+    if (isNewItem) {
+      props.sendMessage({
+        [ITEM_LOOKUP]: code,
+      });
+    }
+
     setCode("");
     setBtnDisabled(true);
   };

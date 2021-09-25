@@ -118,14 +118,34 @@ export default function App() {
     chrome.tabs.sendMessage(tab.id, msg);
   };
 
+  // resolves a promise of IsNewItem to know if you should trigger a data lookup
   const addPendingItem = ({ scode, amt }) => {
-    setItems([
-      ...items,
-      {
-        scode,
-        amt,
-      }
-    ]);
+    return new Promise((resolve) => {
+      setItems(currentItems => {
+        const itemExists = currentItems.find(item => item.scode === scode);
+        if (itemExists) {
+          resolve(false);
+          return currentItems.map(item => {
+            if (item.scode === scode) {
+              return {
+                ...item,
+                amt: Math.min(item.amt + amt, 3),
+              };
+            }
+            return item;
+          });
+        }
+        resolve(true);
+        return [
+          ...currentItems,
+          {
+            scode,
+            amt,
+          }
+        ]
+      });
+    });
+
   };
 
   const updatePendingToLoadedItem = ({ scode, data, }) => {
