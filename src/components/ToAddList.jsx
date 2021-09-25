@@ -13,13 +13,13 @@ const getDisplayName = ({ name, scode }) => {
   return name;
 };
 
-const ToAddItem = ({ scode, url, thumb, name, amt }) => {
+const ToAddItem = ({ scode, url, thumb, name, amt, removeItem }) => {
   return <li>
     <div className="relative pb-8">
       <div className="relative flex space-x-3">
         <div>
           <img className='w-8 rounded-full bg-gray-400 flex items-center
-        justify-center ring-8 ring-white' src={thumb} />
+        justify-center ring-2 ring-black' src={thumb} />
         </div>
         <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
           <div>
@@ -31,6 +31,7 @@ const ToAddItem = ({ scode, url, thumb, name, amt }) => {
         </div>
         <div className='inline-flex items-center p-2'>
           <button
+            onClick={() => removeItem({ scode })}
             type="button"
             className=" border border-transparent rounded-full shadow-sm
           text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2
@@ -48,7 +49,11 @@ export default function ToAddList(props) {
 
   return <div className="flow-root mt-8">
     <ul role="list" >
-      {props.items.map(item => <ToAddItem key={item.scode} {...item}></ToAddItem>)}
+      {props.items.map(item => <ToAddItem
+        key={item.scode}
+        removeItem={props.removeItem}
+        {...item}
+      ></ToAddItem>)}
     </ul>
   </div>;
 
@@ -56,6 +61,7 @@ export default function ToAddList(props) {
 
 ToAddList.propTypes = {
   items: PropTypes.array,
+  removeItem: PropTypes.fn,
 };
 
 ToAddItem.propTypes = {
@@ -64,4 +70,5 @@ ToAddItem.propTypes = {
   thumb: PropTypes.string,
   name: PropTypes.string,
   amt: PropTypes.number,
+  removeItem: PropTypes.fn,
 };
