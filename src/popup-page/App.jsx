@@ -144,10 +144,14 @@ export default function App() {
     })
     );
   };
+
+  const removeItem = ({ scode }) => {
+    setItems(currentItems => currentItems.filter(item => item.scode !== scode));
+  };
+
   const isFirstRun = useRef(true);
   const hasLoadedItems = useRef(false);
   useEffect(() => {
-
     // I'm not super happy about this but we need a way to not trigger
     // a save to memory unless after the first render and we've loaded once
     // this works for now
@@ -156,7 +160,7 @@ export default function App() {
       return;
     }
 
-    if(hasLoadedItems.current) {
+    if (hasLoadedItems.current) {
       hasLoadedItems.current = false;
       return;
     }
@@ -209,6 +213,7 @@ export default function App() {
     ></ToAddInput>
     <ToAddList
       items={items}
+      removeItem={removeItem}
     ></ToAddList>
     <OverwriteCartToggle />
 
