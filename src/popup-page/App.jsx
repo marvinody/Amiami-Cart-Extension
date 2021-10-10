@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import ToAddList from '../components/ToAddList';
 import OverwriteCartToggle from '../components/OverwriteCartToggle';
+import SubmitCartButton from '../components/SubmitCartButton';
 import ToAddInput from '../components/ToAddInput';
 import { ITEM_LOOKUP, ITEM_LOOKUP_RESP } from '../MessageTypes'
 
@@ -145,7 +146,6 @@ export default function App() {
         ]
       });
     });
-
   };
 
   const updatePendingToLoadedItem = ({ scode, data, }) => {
@@ -168,6 +168,10 @@ export default function App() {
   const removeItem = ({ scode }) => {
     setItems(currentItems => currentItems.filter(item => item.scode !== scode));
   };
+
+  const submitItemsToAmiami = () => {
+    console.log("SENDING TO AMIAMI TAB TO CONFIRM")
+  }
 
   const isFirstRun = useRef(true);
   const hasLoadedItems = useRef(false);
@@ -236,6 +240,10 @@ export default function App() {
       removeItem={removeItem}
     ></ToAddList>
     <OverwriteCartToggle />
+    <SubmitCartButton
+      noItems={items.length === 0}
+      activeTab={Boolean(tab)}
+    />
 
   </div>;
 }
