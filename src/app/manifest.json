@@ -9,7 +9,7 @@
   ],
   "default_locale": "en",
   "browser_action": {
-    "default_title": "Chrome extension",
+    "default_title": "Amiami Cart Adder",
     "default_icon": "images/icon-128.png",
     "default_popup": "popup.html"
   },

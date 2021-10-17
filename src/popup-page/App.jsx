@@ -1,9 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ToAddList from '../components/ToAddList';
 import OverwriteCartToggle from '../components/OverwriteCartToggle';
 import SubmitCartButton from '../components/SubmitCartButton';
 import ToAddInput from '../components/ToAddInput';
-import { ITEM_LOOKUP, ITEM_LOOKUP_RESP } from '../MessageTypes'
+import { ITEM_LOOKUP, ITEM_LOOKUP_RESP, ADD_TO_REAL_CART, UPDATE_COOKIE } from '../MessageTypes';
+
+const defaultConfig = {
+  overwriteCart: true,
+};
 
 const messageList = (() => {
 
@@ -37,68 +41,50 @@ const messageList = (() => {
 
 })();
 
-const getCookie = async (setCookie, setTab) => {
-  browser.cookies.get({
-    name: "ransu",
-    url: "https://www.amiami.com",
-  }).then(cookie => {
+const getRansuCookie = () => browser.cookies.get({
+  name: "ransu",
+  url: "https://www.amiami.com",
+}).then(cookie => cookie?.value);
 
-    browser.tabs.query({
-      url: "*://*.amiami.com/*"
-    }).then(tabs => {
-      // console.log({ tabs })
-      // const payload = {
-      //   ADD_TO_CART: {
-      //     ransu: cookie.value,
-      //     scode: "FIGURE-131178",
-      //   }
-      // };
+const setRansuCookie = (ransu) => browser.cookies.set({
+  name: "ransu",
+  domain: ".amiami.com",
+  url: "https://www.amiami.com",
+  expirationDate: Date.now() + 31557600, // 1 year from now
+  value: ransu,
+});
 
-      // this is required to make sure we can use GET requests on this endpoint and stuff
-      if (!tabs[0].active) {
-        return;
-      }
-      setTab(tabs[0]);
+// time based & rng, good enough snowflake
+const generateRansu = () => `extT${Date.now()}RNG${Math.random().toString().slice(2, -5)}`;
 
-      // console.log("sending message: ", payload);
-      // chrome.tabs.sendMessage(tabs[0].id, payload);
-      browser.runtime.onMessage.addListener(msg => {
-        console.log({ msg });
-        if (msg.cookieUpdate) {
-          setCookie(msg.cookieUpdate);
-        }
-      });
-    }).catch(err => console.error(err));
-    console.log({ cookie });
-    if (cookie) {
+const getTab = async (setTab) => {
+  browser.tabs.query({
+    url: "*://*.amiami.com/*"
+  }).then(tabs => {
+    // this is required to make sure we can use GET requests on this tab
+    const activeTab = tabs.find(tab => tab.active);
 
-      // myPort.postMessage({
-      //   // from: "POPUP",
-      //   // payload: {
-      //   //   message: "ADD_TO_CART",
-      //   // },
-      //   ADD_TO_CART: {
-      //     ransu: cookie.value,
-      //     scode: "FIGURE-131178",
-      //   }
-      // })
-      setCookie(cookie.value);
+    if (!activeTab) {
+      return;
     }
-  }).catch(err => {
-    console.error(err);
-    setCookie(err.message);
-  });
+    setTab(activeTab);
+  }).catch(err => console.error(err));
 };
 
-const savedItems = {
+const localStorageMaker = (name) => ({
   get: async () => {
-    const { items } = await browser.storage.local.get('items');
-    return items;
+    const data = await browser.storage.local.get(name);
+    console.debug({ data });
+    return data[name];
   },
   set: (items) => {
-    return browser.storage.local.set({ items, });
+    console.debug(`Setting: ${name}`);
+    return browser.storage.local.set({ [name]: items, });
   }
-};
+});
+
+const savedItems = localStorageMaker('items');
+const savedConfig = localStorageMaker('userConfig');
 
 export default function App() {
   console.count("APP RENDER");
@@ -107,8 +93,15 @@ export default function App() {
   console.log({
     items,
   });
-  const [cookie, setCookie] = useState('Loading');
+
   const [tab, setTab] = useState(null);
+  const [config, setConfig] = useState(defaultConfig);
+
+  const configSetter = (key) => (value) => setConfig(conf => {
+    const newConfig = { ...conf, [key]: value };
+    savedConfig.set(newConfig);
+    return newConfig;
+  });
 
   const sendMessage = (msg) => {
     if (!tab) {
@@ -143,7 +136,7 @@ export default function App() {
             scode,
             amt,
           }
-        ]
+        ];
       });
     });
   };
@@ -169,9 +162,37 @@ export default function App() {
     setItems(currentItems => currentItems.filter(item => item.scode !== scode));
   };
 
-  const submitItemsToAmiami = () => {
-    console.log("SENDING TO AMIAMI TAB TO CONFIRM")
-  }
+  const submitItemsToAmiami = async () => {
+    let ransu = null;
+    if (config.overwriteCart) {
+      ransu = generateRansu();
+    } else {
+      ransu = await getRansuCookie();
+      if (!ransu) { // it may not be set anyway
+        ransu = generateRansu();
+      }
+    }
+
+    sendMessage({
+      [ADD_TO_REAL_CART]: {
+        items,
+        config,
+        ransu,
+      }
+    });
+  };
+
+  useEffect(() => {
+    const unsub = messageList.sub({
+      key: UPDATE_COOKIE,
+      hook: ransu => {
+        console.log(`Setting ransu: ${ransu}`);
+        setRansuCookie(ransu);
+      }
+    });
+
+    return unsub;
+  }, []);
 
   const isFirstRun = useRef(true);
   const hasLoadedItems = useRef(false);
@@ -207,9 +228,16 @@ export default function App() {
         setItems(loadedItems);
       }
 
+      const loadedConfig = await savedConfig.get();
+      if (!loadedConfig) {
+        await savedConfig.set(config);
+      } else {
+        setConfig(loadedConfig);
+      }
+
     })();
 
-    getCookie(setCookie, setTab);
+    getTab(setTab);
 
     const unsub = messageList.sub({
       key: ITEM_LOOKUP_RESP,
@@ -239,10 +267,14 @@ export default function App() {
       items={items}
       removeItem={removeItem}
     ></ToAddList>
-    <OverwriteCartToggle />
+    <OverwriteCartToggle
+      overwriteCart={config.overwriteCart}
+      setOverwriteCart={configSetter('overwriteCart')}
+    />
     <SubmitCartButton
       noItems={items.length === 0}
       activeTab={Boolean(tab)}
+      onClick={submitItemsToAmiami}
     />
 
   </div>;

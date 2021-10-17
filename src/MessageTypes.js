@@ -1,4 +1,7 @@
-export const ADD_TO_CART = "ADD_TO_CART";
+export const ADD_TO_REAL_CART = "ADD_TO_REAL_CART";
+export const ADD_TO_REAL_CART_RESP = "ADD_TO_REAL_CART_RESP";
 
 export const ITEM_LOOKUP = "ITEM_LOOKUP";
 export const ITEM_LOOKUP_RESP = "ITEM_LOOKUP_RESP";
+
+export const UPDATE_COOKIE = "UPDATE_COOKIE";
