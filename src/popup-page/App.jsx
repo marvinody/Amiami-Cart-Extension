@@ -1,8 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react';
 import ToAddList from '../components/ToAddList';
-import OverwriteCartToggle from '../components/OverwriteCartToggle';
+import GenericToggle from '../components/GenericToggle';
+import SubmitCartButton from '../components/SubmitCartButton';
 import ToAddInput from '../components/ToAddInput';
-import { ITEM_LOOKUP, ITEM_LOOKUP_RESP } from '../MessageTypes'
+import {
+  ITEM_LOOKUP_RESP,
+  ADD_TO_REAL_CART,
+  CART_STATE_LOOKUP, CART_STATE_LOOKUP_RESP,
+  UPDATE_COOKIE, UPDATE_COOKIE_RESP,
+} from '../MessageTypes';
+import { useCallback } from 'react';
+
+const defaultConfig = {
+  overwriteCart: true,
+  retryOnServerError: true,
+  loadCartPageOnDone: true,
+};
 
 const messageList = (() => {
 
@@ -36,87 +49,86 @@ const messageList = (() => {
 
 })();
 
-const getCookie = async (setCookie, setTab) => {
-  browser.cookies.get({
-    name: "ransu",
-    url: "https://www.amiami.com",
-  }).then(cookie => {
+const getRansuCookie = () => browser.cookies.get({
+  name: "ransu",
+  url: "https://www.amiami.com",
+}).then(cookie => cookie?.value);
 
-    browser.tabs.query({
-      url: "*://*.amiami.com/*"
-    }).then(tabs => {
-      // console.log({ tabs })
-      // const payload = {
-      //   ADD_TO_CART: {
-      //     ransu: cookie.value,
-      //     scode: "FIGURE-131178",
-      //   }
-      // };
+const setRansuCookie = (ransu) => browser.cookies.set({
+  name: "ransu",
+  domain: ".amiami.com",
+  url: "https://www.amiami.com",
+  expirationDate: Date.now() + 31557600, // 1 year from now
+  value: ransu,
+});
 
-      // this is required to make sure we can use GET requests on this endpoint and stuff
-      if (!tabs[0].active) {
-        return;
-      }
-      setTab(tabs[0]);
+// time based & rng, good enough snowflake
+const generateRansu = () => `extT${Date.now()}RNG${Math.random().toString().slice(2, -5)}`;
 
-      // console.log("sending message: ", payload);
-      // chrome.tabs.sendMessage(tabs[0].id, payload);
-      browser.runtime.onMessage.addListener(msg => {
-        console.log({ msg });
-        if (msg.cookieUpdate) {
-          setCookie(msg.cookieUpdate);
-        }
-      });
-    }).catch(err => console.error(err));
-    console.log({ cookie });
-    if (cookie) {
+const getTab = async (setTab) => {
+  browser.tabs.query({
+    url: "*://*.amiami.com/*"
+  }).then(tabs => {
+    // this is required to make sure we can use GET requests on this tab
+    const activeTab = tabs.find(tab => tab.active);
 
-      // myPort.postMessage({
-      //   // from: "POPUP",
-      //   // payload: {
-      //   //   message: "ADD_TO_CART",
-      //   // },
-      //   ADD_TO_CART: {
-      //     ransu: cookie.value,
-      //     scode: "FIGURE-131178",
-      //   }
-      // })
-      setCookie(cookie.value);
-    }
-  }).catch(err => {
-    console.error(err);
-    setCookie(err.message);
-  });
-};
-
-const savedItems = {
-  get: async () => {
-    const { items } = await browser.storage.local.get('items');
-    return items;
-  },
-  set: (items) => {
-    return browser.storage.local.set({ items, });
-  }
-};
-
-export default function App() {
-  console.count("APP RENDER");
-
-  const [items, setItems] = useState([]);
-  console.log({
-    items,
-  });
-  const [cookie, setCookie] = useState('Loading');
-  const [tab, setTab] = useState(null);
-
-  const sendMessage = (msg) => {
-    if (!tab) {
-      console.log("Trying to send message, but tab is null");
+    if (!activeTab) {
       return;
     }
-    console.log("SENDING MESSAGE: \n" + JSON.stringify(msg, null, 2));
+    setTab(activeTab);
+  }).catch(err => console.error(err));
+};
+
+const localStorageMaker = (name) => ({
+  get: async () => {
+    const data = await browser.storage.local.get(name);
+    return data[name];
+  },
+  set: (items) => {
+    return browser.storage.local.set({ [name]: items, });
+  }
+});
+
+const savedItems = localStorageMaker('items');
+const savedConfig = localStorageMaker('userConfig');
+
+export default function App() {
+
+  const [items, setItems] = useState([]);
+
+  const [tab, setTab] = useState(null);
+
+  const [cartState, setCartState] = useState({
+    done: false,
+    items: [],
+  });
+  const [config, setConfig] = useState(defaultConfig);
+
+  const configSetter = (key) => (value) => setConfig(conf => {
+    const newConfig = { ...conf, [key]: value };
+    savedConfig.set(newConfig);
+    return newConfig;
+  });
+
+  const msgBuffer = useRef([]);
+
+  const sendMessage = useCallback((msg) => {
+    if (!tab) {
+      console.log("Trying to send message, but tab is null; Adding to buffer");
+      msgBuffer.current.push(msg);
+      return;
+    }
     chrome.tabs.sendMessage(tab.id, msg);
-  };
+  }, [tab]);
+
+  // Submit buffer to tab if we detect one
+  useEffect(() => {
+    console.log("Tab changed, sending old buffer maybe:", Boolean(tab));
+    if(tab && msgBuffer.current.length > 0) {
+      msgBuffer.current.forEach(msg => sendMessage(msg));
+      msgBuffer.current = [];
+    }
+  }, [tab]);
 
   // resolves a promise of IsNewItem to know if you should trigger a data lookup
   const addPendingItem = ({ scode, amt }) => {
@@ -142,10 +154,9 @@ export default function App() {
             scode,
             amt,
           }
-        ]
+        ];
       });
     });
-
   };
 
   const updatePendingToLoadedItem = ({ scode, data, }) => {
@@ -169,6 +180,65 @@ export default function App() {
     setItems(currentItems => currentItems.filter(item => item.scode !== scode));
   };
 
+  const submitItemsToAmiami = async () => {
+    let ransu = null;
+    if (config.overwriteCart) {
+      ransu = generateRansu();
+    } else {
+      ransu = await getRansuCookie();
+      if (!ransu) { // it may not be set anyway
+        ransu = generateRansu();
+      }
+    }
+
+    sendMessage({
+      [ADD_TO_REAL_CART]: {
+        items,
+        config,
+        ransu,
+      }
+    });
+  };
+
+  // Cookie (ransu) subscribe
+  useEffect(() => {
+    const unsub = messageList.sub({
+      key: UPDATE_COOKIE,
+      hook: async (ransu) => {
+        await setRansuCookie(ransu);
+
+        // we should only receive the update cookie event once
+        // the add part finishes. so we can assume that we only want
+        // to reload the page after cookie setting is done
+        if(config.loadCartPageOnDone) {
+          sendMessage({
+            [UPDATE_COOKIE_RESP]: true,
+          });
+        }
+      }
+    });
+
+    return unsub;
+  }, [sendMessage]);
+
+  // Cart State subscriber & initial lookup
+  useEffect(() => {
+    const unsub = messageList.sub({
+      key: CART_STATE_LOOKUP_RESP,
+      hook: cartState => {
+        setCartState(cartState);
+      }
+    });
+
+    sendMessage({
+      [CART_STATE_LOOKUP]: true,
+    });
+
+    return unsub;
+  }, [sendMessage]);
+
+
+  // Items saver
   const isFirstRun = useRef(true);
   const hasLoadedItems = useRef(false);
   useEffect(() => {
@@ -203,9 +273,16 @@ export default function App() {
         setItems(loadedItems);
       }
 
+      const loadedConfig = await savedConfig.get();
+      if (!loadedConfig) {
+        await savedConfig.set(config);
+      } else {
+        setConfig(loadedConfig);
+      }
+
     })();
 
-    getCookie(setCookie, setTab);
+    getTab(setTab);
 
     const unsub = messageList.sub({
       key: ITEM_LOOKUP_RESP,
@@ -233,9 +310,30 @@ export default function App() {
     ></ToAddInput>
     <ToAddList
       items={items}
+      cartState={cartState}
       removeItem={removeItem}
     ></ToAddList>
-    <OverwriteCartToggle />
+
+    <GenericToggle
+      currentState={config.overwriteCart}
+      setCurrentState={configSetter('overwriteCart')}
+      text="Overwrite Existing Cart"
+    />
+    <GenericToggle
+      currentState={config.retryOnServerError}
+      setCurrentState={configSetter('retryOnServerError')}
+      text="Retry Adding on Server Error"
+    />
+    <GenericToggle
+      currentState={config.loadCartPageOnDone}
+      setCurrentState={configSetter('loadCartPageOnDone')}
+      text="Load Cart Page When Done"
+    />
+    <SubmitCartButton
+      noItems={items.length === 0}
+      activeTab={Boolean(tab)}
+      onClick={submitItemsToAmiami}
+    />
 
   </div>;
 }

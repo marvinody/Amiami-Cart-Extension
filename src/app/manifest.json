@@ -1,7 +1,7 @@
 {
   "name": "Amiami Cart Adder",
   "description": "A small extension to add things to your cart in an instant. Useful for short pre-order windows if you want to order stuff quickly. DOES NOT PLACE THE ORDER FOR YOU, it simply adds it to your cart so you don't have to visit different pages.",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "permissions": [
     "storage",
     "cookies",
@@ -9,7 +9,7 @@
   ],
   "default_locale": "en",
   "browser_action": {
-    "default_title": "Chrome extension",
+    "default_title": "Amiami Cart Adder",
     "default_icon": "images/icon-128.png",
     "default_popup": "popup.html"
   },

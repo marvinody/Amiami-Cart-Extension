@@ -1,5 +1,5 @@
 import { PlusCircleIcon } from '@heroicons/react/outline';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
 import { ITEM_LOOKUP } from '../MessageTypes';
 
@@ -70,18 +70,18 @@ export default function ToAddInput(props) {
       <div className="relative flex items-stretch flex-grow focus-within:z-10">
         <input type="text" name="code" id="code" className="focus:ring-indigo-500
     focus:border-indigo-500 block w-full rounded-none rounded-l-md sm:text-sm border-gray-300"
-          placeholder="CGD-9540"
-          value={code}
-          onChange={onCodeChange}
-          required={true}
+        placeholder="CGD-9540"
+        value={code}
+        onChange={onCodeChange}
+        required={true}
         />
       </div>
       <div className="inset-y-0 right-0 relative inline-flex items-center">
         <select id="amt" name="amt" className="focus:ring-indigo-500
       focus:border-indigo-500 border-gray-300 h-full py-0 pl-2 pr-7
       text-gray-500 sm:text-sm focus-within:z-10"
-          value={amt}
-          onChange={onAmtChange}
+        value={amt}
+        onChange={onAmtChange}
         >
           <option value={1}>1</option>
           <option value={2}>2</option>
