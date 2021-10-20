@@ -1,5 +1,5 @@
 import { PlusCircleIcon } from '@heroicons/react/outline';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
 import { ITEM_LOOKUP } from '../MessageTypes';
 

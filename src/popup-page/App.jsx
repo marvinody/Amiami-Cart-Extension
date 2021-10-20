@@ -1,12 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ToAddList from '../components/ToAddList';
-import OverwriteCartToggle from '../components/OverwriteCartToggle';
+import GenericToggle from '../components/GenericToggle';
 import SubmitCartButton from '../components/SubmitCartButton';
 import ToAddInput from '../components/ToAddInput';
-import { ITEM_LOOKUP, ITEM_LOOKUP_RESP, ADD_TO_REAL_CART, UPDATE_COOKIE } from '../MessageTypes';
+import {
+  ITEM_LOOKUP_RESP,
+  ADD_TO_REAL_CART,
+  CART_STATE_LOOKUP, CART_STATE_LOOKUP_RESP,
+  UPDATE_COOKIE, UPDATE_COOKIE_RESP,
+} from '../MessageTypes';
+import { useCallback } from 'react';
 
 const defaultConfig = {
   overwriteCart: true,
+  retryOnServerError: true,
+  loadCartPageOnDone: true,
 };
 
 const messageList = (() => {
@@ -74,11 +82,9 @@ const getTab = async (setTab) => {
 const localStorageMaker = (name) => ({
   get: async () => {
     const data = await browser.storage.local.get(name);
-    console.debug({ data });
     return data[name];
   },
   set: (items) => {
-    console.debug(`Setting: ${name}`);
     return browser.storage.local.set({ [name]: items, });
   }
 });
@@ -87,14 +93,15 @@ const savedItems = localStorageMaker('items');
 const savedConfig = localStorageMaker('userConfig');
 
 export default function App() {
-  console.count("APP RENDER");
 
   const [items, setItems] = useState([]);
-  console.log({
-    items,
-  });
 
   const [tab, setTab] = useState(null);
+
+  const [cartState, setCartState] = useState({
+    done: false,
+    items: [],
+  });
   const [config, setConfig] = useState(defaultConfig);
 
   const configSetter = (key) => (value) => setConfig(conf => {
@@ -103,14 +110,25 @@ export default function App() {
     return newConfig;
   });
 
-  const sendMessage = (msg) => {
+  const msgBuffer = useRef([]);
+
+  const sendMessage = useCallback((msg) => {
     if (!tab) {
-      console.log("Trying to send message, but tab is null");
+      console.log("Trying to send message, but tab is null; Adding to buffer");
+      msgBuffer.current.push(msg);
       return;
     }
-    console.log("SENDING MESSAGE: \n" + JSON.stringify(msg, null, 2));
     chrome.tabs.sendMessage(tab.id, msg);
-  };
+  }, [tab]);
+
+  // Submit buffer to tab if we detect one
+  useEffect(() => {
+    console.log("Tab changed, sending old buffer maybe:", Boolean(tab));
+    if(tab && msgBuffer.current.length > 0) {
+      msgBuffer.current.forEach(msg => sendMessage(msg));
+      msgBuffer.current = [];
+    }
+  }, [tab]);
 
   // resolves a promise of IsNewItem to know if you should trigger a data lookup
   const addPendingItem = ({ scode, amt }) => {
@@ -182,18 +200,45 @@ export default function App() {
     });
   };
 
+  // Cookie (ransu) subscribe
   useEffect(() => {
     const unsub = messageList.sub({
       key: UPDATE_COOKIE,
-      hook: ransu => {
-        console.log(`Setting ransu: ${ransu}`);
-        setRansuCookie(ransu);
+      hook: async (ransu) => {
+        await setRansuCookie(ransu);
+
+        // we should only receive the update cookie event once
+        // the add part finishes. so we can assume that we only want
+        // to reload the page after cookie setting is done
+        if(config.loadCartPageOnDone) {
+          sendMessage({
+            [UPDATE_COOKIE_RESP]: true,
+          });
+        }
       }
     });
 
     return unsub;
-  }, []);
+  }, [sendMessage]);
 
+  // Cart State subscriber & initial lookup
+  useEffect(() => {
+    const unsub = messageList.sub({
+      key: CART_STATE_LOOKUP_RESP,
+      hook: cartState => {
+        setCartState(cartState);
+      }
+    });
+
+    sendMessage({
+      [CART_STATE_LOOKUP]: true,
+    });
+
+    return unsub;
+  }, [sendMessage]);
+
+
+  // Items saver
   const isFirstRun = useRef(true);
   const hasLoadedItems = useRef(false);
   useEffect(() => {
@@ -265,11 +310,24 @@ export default function App() {
     ></ToAddInput>
     <ToAddList
       items={items}
+      cartState={cartState}
       removeItem={removeItem}
     ></ToAddList>
-    <OverwriteCartToggle
-      overwriteCart={config.overwriteCart}
-      setOverwriteCart={configSetter('overwriteCart')}
+
+    <GenericToggle
+      currentState={config.overwriteCart}
+      setCurrentState={configSetter('overwriteCart')}
+      text="Overwrite Existing Cart"
+    />
+    <GenericToggle
+      currentState={config.retryOnServerError}
+      setCurrentState={configSetter('retryOnServerError')}
+      text="Retry Adding on Server Error"
+    />
+    <GenericToggle
+      currentState={config.loadCartPageOnDone}
+      setCurrentState={configSetter('loadCartPageOnDone')}
+      text="Load Cart Page When Done"
     />
     <SubmitCartButton
       noItems={items.length === 0}

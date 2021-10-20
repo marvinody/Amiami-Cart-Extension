@@ -1,25 +1,17 @@
-/* eslint-disable no-console */
-// import Demo from "../components/Demo";
-
-// let myPort = browser.runtime.connect({ name: "port-from-cs" });
-// myPort.postMessage({ from: "CONTENT", payload: { message: "hello" } });
-
-// myPort.onMessage.addListener(function (m) {
-//   console.log(`In content script, received message from background script: "${m.payload.message}"`);
-// });
-
-
 import {
-  ITEM_LOOKUP, ITEM_LOOKUP_RESP, ADD_TO_REAL_CART, ADD_TO_REAL_CART_RESP, UPDATE_COOKIE
+  ITEM_LOOKUP, ITEM_LOOKUP_RESP,
+  ADD_TO_REAL_CART,
+  UPDATE_COOKIE, UPDATE_COOKIE_RESP,
+  CART_STATE_LOOKUP, CART_STATE_LOOKUP_RESP
 } from '../MessageTypes';
 
+import ITEM_META_STATE from '../ItemMetaStates';
 
+const gotoCartPart = () => {
+  document.location.href = 'https://www.amiami.com/eng/cart/';
+};
 
-
-
-
-const addToCart = ({ ransu, scode }) => {
-  console.log({ ransu, scode });
+const addToCart = ({ ransu, scode, amount }) => {
   return content.fetch('https://api.amiami.com/api/v1.0/cart', {
     method: 'POST',
     headers: {
@@ -33,8 +25,8 @@ const addToCart = ({ ransu, scode }) => {
       mcode: null,
       scode,
       ransu,
-      amount: 1,
-    })
+      amount,
+    }),
   })
     .then(async response => {
       return {
@@ -48,28 +40,57 @@ const addToCart = ({ ransu, scode }) => {
 
 const MAX_ATTEMPTS = 5;
 
-const handleCartAdd = async ({ items, config, ransu }) => {
+const mapState = (state) => {
+  return {
+    done: state.done,
+    items: [
+      state.inProgressItem,
+      ...state.metaItems,
+      ...state.finishedItems,
+    ].filter(item => Boolean(item))
+  };
+};
 
-  console.log("HANDLE CART ADD");
-  console.log({ items });
+const sendState = (state) => {
+  browser.runtime.sendMessage({
+    [CART_STATE_LOOKUP_RESP]: mapState(state)
+  });
+};
 
+const handleCartAdd = async ({ items, config, ransu }, state) => {
 
   const metaItems = items.map(item => ({
     item,
     meta: {
       attempts: 0,
       statuses: [],
+      state: ITEM_META_STATE.PENDING
     }
   }));
 
   const finishedItems = [];
 
+  state.done = false;
+  state.metaItems = metaItems;
+  state.finishedItems = finishedItems;
+  state.inProgressItem = null;
+
 
   while (metaItems.length > 0) {
-    const { item, meta } = metaItems.pop();
-    meta.attepts += 1;
+    state.inProgressItem = metaItems.pop();
+    const { item, meta } = state.inProgressItem;
 
-    const { status, data } = await addToCart({ scode: item.scode, ransu });
+    meta.state = ITEM_META_STATE.IN_PROGRESS;
+
+    meta.attempts += 1;
+
+    sendState(state);
+
+    const { status, data } = await addToCart({
+      scode: item.scode,
+      ransu,
+      amount: item.amt
+    });
 
     meta.statuses.push({
       status,
@@ -83,33 +104,50 @@ const handleCartAdd = async ({ items, config, ransu }) => {
       if (meta.attempts > MAX_ATTEMPTS) {
         finishedItems.push({
           item,
-          meta,
+          meta: {
+            ...meta,
+            state: ITEM_META_STATE.FAILED
+          },
         });
+        state.inProgressItem = null;
+        sendState(state);
         continue;
       }
 
-      // which statuses do we retry?
+      // which http statuses do we retry?
       // 200s with failing Rsuc/Rmsg means stock issues maybe? so not that
       // 400 probably won't get us fixed next try, so let's not
       // 500 makes sense since probably server error
-      if (status >= 500) {
+      if (status >= 500 && config.retryOnServerError) {
         metaItems.push({
-          item, meta
+          item, meta: {
+            ...meta,
+            state: ITEM_META_STATE.PENDING
+          },
         });
       } else {
         // 2xx, 4xx
         finishedItems.push({
           item,
-          meta,
+          meta: {
+            ...meta,
+            state: ITEM_META_STATE.FAILED
+          },
         });
       }
 
     } else { // success
       finishedItems.push({
         item,
-        meta
+        meta: {
+          ...meta,
+          state: ITEM_META_STATE.SUCCESS
+        },
       });
     }
+
+    state.inProgressItem = null;
+    sendState(state);
 
     if (data?.session?.ransu) {
       ransu = data.session.ransu;
@@ -117,10 +155,10 @@ const handleCartAdd = async ({ items, config, ransu }) => {
   }
 
 
-
-  console.log(finishedItems);
-  browser.runtime.sendMessage({
-    [UPDATE_COOKIE]: ransu
+  state.done = true;
+  await browser.runtime.sendMessage({
+    [UPDATE_COOKIE]: ransu,
+    [CART_STATE_LOOKUP_RESP]: mapState(state),
   });
 };
 
@@ -150,7 +188,6 @@ const lookupItem = ({ scode }) => {
       };
     })
     .then(resp => {
-      console.log("SENDING " + ITEM_LOOKUP_RESP + JSON.stringify(resp, null, 2));
       browser.runtime.sendMessage({
         [ITEM_LOOKUP_RESP]: resp
       });
@@ -158,26 +195,42 @@ const lookupItem = ({ scode }) => {
 };
 
 browser.runtime.onMessage.addListener(message => {
-  console.log(message, Boolean(message.ADD_TO_CART), Boolean(message[ITEM_LOOKUP]),);
+
+  // this is an ugly way to do this, but it'll work for now
+  // this will act like a singleton and we'll pretend to only have one
+  // if another cart add request comes in and we have one going, don't start new
+  // This will also be our data to send to popup for it to inform user of current status
+  // having a 'global' state lets us fully update user on fresh open
+  let addCartState = {
+    done: true,
+  };
 
 
-  if (message.ADD_TO_CART) {
-    console.log("ADDING TO CART");
-    // addToCart(message.ADD_TO_CART)
-    browser.runtime.sendMessage({
-      cookieUpdate: "NEW COOKIE VALUE"
-    });
-  } else if (message[ITEM_LOOKUP]) {
-    console.log(`LOOKING UP ITEM: ${message[ITEM_LOOKUP]}`);
+  // no elses is on purpose since this lets us send multiple actions in 1
+  // message if needed later
+  if (message[ITEM_LOOKUP]) {
     lookupItem({ scode: message[ITEM_LOOKUP] });
-  } else if (message[ADD_TO_REAL_CART]) {
-    handleCartAdd(message[ADD_TO_REAL_CART]);
   }
+  if (message[ADD_TO_REAL_CART]) {
+    if(addCartState.done) { // prevent dupe submission
+      // we're in progress then
+      addCartState.done = false;
+      handleCartAdd(message[ADD_TO_REAL_CART], addCartState);
+    }
+  }
+  if (message[CART_STATE_LOOKUP]) {
+    sendState(addCartState);
+  }
+
+  if(message[UPDATE_COOKIE_RESP]) {
+    gotoCartPart();
+  }
+
+
 });
 
 function App() {
-  // return <Demo/>;
-  console.log("CONTENT SCRIPT");
-  return 'yowatup';
+  console.log("Amiami Cart Extension detected the site!");
+  return '';
 }
 export default App;
