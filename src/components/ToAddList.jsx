@@ -94,7 +94,7 @@ ToAddList.propTypes = {
   removeItem: PropTypes.fn,
   cartState: PropTypes.shape({
     done: PropTypes.bool,
-    items: PropTypes.array(),
+    items: PropTypes.array,
   })
 };
 
